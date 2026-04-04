@@ -159,37 +159,17 @@
 
   <!-- ── DATA ENTRY PAGE ── -->
   <div id="page-entry" class="page">
-    <div class="card">
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <span>Daily Revenue & Quantity — <span id="entry-month-label"></span></span>
-        <button class="btn btn-sm btn-success" id="saveAllBtn">
-          <i class="bi bi-check-all"></i> Save All
-        </button>
-      </div>
-      <div class="card-body p-0">
-        <div class="table-responsive">
-          <table class="table table-hover entry-table mb-0" id="entryTable">
-            <thead>
-              <tr>
-                <th style="width:60px">Day</th>
-                <th style="width:100px">Weekday</th>
-                <th>Revenue (₹)</th>
-                <th>Quantity</th>
-                <th style="width:80px">Save</th>
-              </tr>
-            </thead>
-            <tbody id="entryBody"></tbody>
-            <tfoot>
-              <tr class="table-dark fw-bold">
-                <td colspan="2">TOTAL</td>
-                <td id="totalRevenue">₹0</td>
-                <td id="totalQuantity">0</td>
-                <td></td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      </div>
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h6 class="mb-0 fw-bold text-dark">Data Entry — <span id="entry-month-label"></span></h6>
+      <button class="btn btn-sm btn-success" id="saveAllBtn">
+        <i class="bi bi-check-all"></i> Save All
+      </button>
+    </div>
+    <div class="sheet-scroll">
+      <table class="sheet-table" id="sheetTable">
+        <thead id="sheetHead"></thead>
+        <tbody id="sheetBody"></tbody>
+      </table>
     </div>
   </div>
 

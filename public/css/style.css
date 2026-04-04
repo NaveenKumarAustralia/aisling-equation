@@ -163,6 +163,106 @@ body { background: var(--bg); font-family: 'Segoe UI', system-ui, sans-serif; di
 .entry-table tr:hover td { background: #f9fafb; }
 .entry-table tr.has-data:hover td { background: #dcfce7; }
 
+/* ── SHEET TABLE ── */
+.sheet-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.sheet-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+  min-width: max-content;
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+
+.sheet-table th, .sheet-table td {
+  border-right: 1px solid #e5e7eb;
+  border-bottom: 1px solid #e5e7eb;
+  white-space: nowrap;
+  padding: 0;
+}
+
+.col-name  { width: 185px; min-width: 185px; padding: 6px 10px; }
+.col-monthly { width: 90px; min-width: 90px; text-align: right; padding: 6px 8px; }
+.col-day   { width: 58px; min-width: 58px; text-align: center; padding: 3px 2px; }
+.col-total { width: 90px; min-width: 90px; text-align: right; padding: 6px 8px; background: #f9fafb; border-left: 2px solid #d1d5db; }
+
+/* Sticky columns */
+.col-sticky { position: sticky; z-index: 2; background: white; }
+.col-name.col-sticky  { left: 0; }
+.col-monthly.col-sticky { left: 185px; border-right: 2px solid #d1d5db; }
+
+/* Sticky header cells */
+.sheet-table thead th { position: sticky; top: 0; z-index: 1; background: #f9fafb; }
+.sheet-table thead th.col-sticky { z-index: 3; }
+
+/* Header rows */
+.row-dates th   { background: #1a1f36 !important; color: white; font-weight: 700; text-align: center; padding: 8px 4px; }
+.row-weekdays th { background: #2d3561 !important; color: #a8b0d0; font-size: 11px; text-align: center; padding: 5px 4px; }
+.row-dates .weekend, .row-weekdays .weekend { background: #373f73 !important; }
+
+/* Revenue row */
+.row-revenue td            { background: #f0fdf4; }
+.row-revenue .col-sticky   { background: #f0fdf4; }
+.row-revenue .weekend      { background: #dcfce7; }
+
+/* Quantity row */
+.row-quantity td           { background: #eff6ff; }
+.row-quantity .col-sticky  { background: #eff6ff; }
+.row-quantity .weekend     { background: #dbeafe; }
+
+/* Blank separator rows */
+.row-blank td              { height: 6px; background: #f9fafb; padding: 0; }
+.row-blank .col-sticky     { background: #f9fafb; }
+
+/* Section header rows */
+.row-section-header td     { background: #374151; color: white; font-weight: 700; font-size: 12px; padding: 5px 10px; }
+
+/* Staff rows */
+.row-staff td              { background: #fffbeb; }
+.row-staff .col-sticky     { background: #fffbeb; }
+.row-staff .weekend        { background: #fef3c7; }
+
+/* Expense rows */
+.row-expense td            { background: #fef2f2; }
+.row-expense .col-sticky   { background: #fef2f2; }
+.row-expense .weekend      { background: #fee2e2; }
+
+/* Section totals */
+.row-section-total td      { background: #f3f4f6; }
+.row-section-total .col-sticky { background: #f3f4f6; }
+.row-section-total .weekend { background: #e5e7eb; }
+
+/* Profit row */
+.row-profit td             { background: #f5f3ff; }
+.row-profit .col-sticky    { background: #f5f3ff; }
+.row-profit .weekend       { background: #ede9fe; }
+
+/* Cell types */
+.cell-calc  { color: #6b7280; font-size: 11px; text-align: center; }
+.cell-profit { font-weight: 600; font-size: 11px; text-align: center; }
+.cell-profit.positive { color: #16a34a; }
+.cell-profit.negative { color: #dc2626; }
+
+/* Sheet inputs */
+.sheet-input {
+  width: 54px;
+  border: none;
+  background: transparent;
+  text-align: center;
+  font-size: 12px;
+  padding: 5px 2px;
+  outline: none;
+  color: #111827;
+}
+.sheet-input:focus { background: #dbeafe; border-radius: 4px; }
+.sheet-input::placeholder { color: #d1d5db; }
+
 /* ── QUICK STATS ── */
 .quick-stat-label { font-size: 12px; color: #6b7280; font-weight: 500; }
 .quick-stat-value { font-size: 18px; font-weight: 700; color: #111827; }
