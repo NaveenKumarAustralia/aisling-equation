@@ -24,17 +24,14 @@
     <a href="#" class="nav-item" data-page="entry">
       <i class="bi bi-pencil-square"></i> Data Entry
     </a>
-    <a href="#" class="nav-item" data-page="staff">
-      <i class="bi bi-people"></i> Staff
-    </a>
-    <a href="#" class="nav-item" data-page="expenses">
-      <i class="bi bi-receipt"></i> Expenses
-    </a>
-    <a href="#" class="nav-item" data-page="analysis">
-      <i class="bi bi-bar-chart-line"></i> Analysis
-    </a>
     <a href="#" class="nav-item" data-page="yearly">
       <i class="bi bi-calendar3"></i> Yearly View
+    </a>
+    <a href="#" class="nav-item" data-page="shipments">
+      <i class="bi bi-box-seam"></i> Shipments
+    </a>
+    <a href="#" class="nav-item" data-page="balance">
+      <i class="bi bi-wallet"></i> Balance
     </a>
   </nav>
 
@@ -70,49 +67,43 @@
 
   <!-- ── DASHBOARD PAGE ── -->
   <div id="page-dashboard" class="page active">
-    <div class="row g-4 mb-4">
-      <div class="col-sm-6 col-xl-3">
-        <div class="stat-card revenue">
-          <div class="stat-icon"><i class="bi bi-cash-stack"></i></div>
-          <div class="stat-info">
-            <div class="stat-label">Total Revenue</div>
-            <div class="stat-value" id="dash-revenue">₹0</div>
-          </div>
+
+    <!-- Date range bar -->
+    <div class="dash-range-bar mb-4">
+      <div class="d-flex flex-wrap align-items-center gap-2">
+        <div class="d-flex gap-1 flex-wrap" id="rangePresets">
+          <button class="range-btn active" data-range="thisMonth">This Month</button>
+          <button class="range-btn" data-range="lastMonth">Last Month</button>
+          <button class="range-btn" data-range="3m">Last 3 Months</button>
+          <button class="range-btn" data-range="6m">Last 6 Months</button>
+          <button class="range-btn" data-range="12m">Last 12 Months</button>
+          <button class="range-btn" data-range="custom">Custom</button>
         </div>
-      </div>
-      <div class="col-sm-6 col-xl-3">
-        <div class="stat-card quantity">
-          <div class="stat-icon"><i class="bi bi-box-seam"></i></div>
-          <div class="stat-info">
-            <div class="stat-label">Total Quantity</div>
-            <div class="stat-value" id="dash-quantity">0</div>
-          </div>
+        <div id="customRange" class="d-flex align-items-center gap-2" style="display:none!important">
+          <input type="month" id="rangeFrom" class="form-control form-control-sm" style="width:150px"/>
+          <span class="text-muted small">—</span>
+          <input type="month" id="rangeTo" class="form-control form-control-sm" style="width:150px"/>
         </div>
-      </div>
-      <div class="col-sm-6 col-xl-3">
-        <div class="stat-card expenses">
-          <div class="stat-icon"><i class="bi bi-people"></i></div>
-          <div class="stat-info">
-            <div class="stat-label">Total Expenses</div>
-            <div class="stat-value" id="dash-expenses">₹0</div>
-          </div>
-        </div>
-      </div>
-      <div class="col-sm-6 col-xl-3">
-        <div class="stat-card profit" id="profitCard">
-          <div class="stat-icon"><i class="bi bi-graph-up-arrow"></i></div>
-          <div class="stat-info">
-            <div class="stat-label">Net Profit</div>
-            <div class="stat-value" id="dash-profit">₹0</div>
+        <div class="ms-auto d-flex align-items-center gap-3">
+          <button class="btn btn-sm btn-outline-primary" id="addTileBtn" style="display:none">
+            <i class="bi bi-plus"></i> Add Tile
+          </button>
+          <div class="form-check form-switch mb-0 d-flex align-items-center gap-2">
+            <input class="form-check-input" type="checkbox" id="compareToggle" checked/>
+            <label class="form-check-label small fw-semibold text-muted" for="compareToggle">Compare: Same Period Last Year</label>
           </div>
         </div>
       </div>
     </div>
 
+    <!-- Dynamic stat tiles (built by JS) -->
+    <div class="row g-4 mb-4" id="dashTilesRow"></div>
+
+    <!-- Charts -->
     <div class="row g-4">
       <div class="col-lg-8">
         <div class="card">
-          <div class="card-header">Daily Revenue — <span id="dash-month-label"></span></div>
+          <div class="card-header" id="dashChartLabel">Revenue Chart</div>
           <div class="card-body">
             <canvas id="dashRevenueChart" height="100"></canvas>
           </div>
@@ -128,6 +119,7 @@
       </div>
     </div>
 
+    <!-- Quick Stats -->
     <div class="row g-4 mt-0">
       <div class="col-12">
         <div class="card">
@@ -150,6 +142,10 @@
                 <div class="quick-stat-label">Profit Margin</div>
                 <div class="quick-stat-value" id="dash-margin">0%</div>
               </div>
+              <div class="col">
+                <div class="quick-stat-label">Avg Cost / Item</div>
+                <div class="quick-stat-value" id="dash-unit-cost">₹0</div>
+              </div>
             </div>
           </div>
         </div>
@@ -159,17 +155,29 @@
 
   <!-- ── DATA ENTRY PAGE ── -->
   <div id="page-entry" class="page">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-      <h6 class="mb-0 fw-bold text-dark">Data Entry — <span id="entry-month-label"></span></h6>
-      <button class="btn btn-sm btn-success" id="saveAllBtn">
-        <i class="bi bi-check-all"></i> Save All
-      </button>
-    </div>
-    <div class="sheet-scroll">
-      <table class="sheet-table" id="sheetTable">
-        <thead id="sheetHead"></thead>
-        <tbody id="sheetBody"></tbody>
-      </table>
+    <div class="sheet-container">
+      <!-- Year bar + Save All -->
+      <div class="sheet-year-bar">
+        <div class="d-flex align-items-center gap-2">
+          <button class="btn-year-nav" id="yearPrev"><i class="bi bi-chevron-left"></i></button>
+          <span class="year-display" id="yearDisplay">2025</span>
+          <button class="btn-year-nav" id="yearNext"><i class="bi bi-chevron-right"></i></button>
+        </div>
+        <button class="btn btn-sm btn-success" id="saveAllBtn">
+          <i class="bi bi-check-all"></i> Save All
+        </button>
+      </div>
+      <!-- Month tabs -->
+      <div class="sheet-tabs" id="sheetTabs"></div>
+      <!-- Month sheet -->
+      <div class="sheet-scroll" id="sheetScroll">
+        <table class="sheet-table" id="sheetTable">
+          <thead id="sheetHead"></thead>
+          <tbody id="sheetBody"></tbody>
+        </table>
+      </div>
+      <!-- Yearly total view -->
+      <div id="yearlyInEntry" style="display:none;padding:20px"></div>
     </div>
   </div>
 
@@ -338,6 +346,83 @@
             <tr class="table-dark fw-bold" id="yearlyTotals"></tr>
           </tfoot>
         </table>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ── SHIPMENTS PAGE ── -->
+  <div id="page-shipments" class="page">
+    <div class="row g-4 mb-4">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header d-flex align-items-center gap-3">
+            KarmaEast Shipments &amp; Payments
+            <div class="ms-auto d-flex gap-2 align-items-center">
+              <input type="text" id="shipmentsSearch" class="form-control form-control-sm" placeholder="Search invoice / date…" style="width:200px"/>
+              <select id="shipmentsFilter" class="form-select form-select-sm" style="width:140px">
+                <option value="all">All</option>
+                <option value="shipment">Shipments only</option>
+                <option value="payment">Payments only</option>
+              </select>
+            </div>
+          </div>
+          <div class="card-body p-0">
+            <div style="overflow-x:auto">
+              <table class="table table-hover table-sm mb-0" id="shipmentsTable">
+                <thead class="table-dark">
+                  <tr>
+                    <th>Date</th>
+                    <th>Type</th>
+                    <th>Invoice</th>
+                    <th class="text-end">Stock Value $</th>
+                    <th class="text-end">Shipping $</th>
+                    <th class="text-end">Total $</th>
+                    <th class="text-end">Payment $</th>
+                    <th class="text-end">Running Balance $</th>
+                  </tr>
+                </thead>
+                <tbody id="shipmentsBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── BALANCE PAGE ── -->
+  <div id="page-balance" class="page">
+    <div class="row g-4 mb-4" id="balanceSummaryRow"></div>
+    <div class="row g-4">
+      <div class="col-lg-6">
+        <div class="card">
+          <div class="card-header">Payments to KarmaEast (USD)</div>
+          <div class="card-body">
+            <canvas id="balancePaymentsChart" height="120"></canvas>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="card">
+          <div class="card-header">Shipment Costs vs Payments — All Time</div>
+          <div class="card-body d-flex align-items-center justify-content-center">
+            <canvas id="balancePieChart" style="max-height:260px"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="row g-4 mt-0">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header">Recent Activity (last 20 transactions)</div>
+          <div class="card-body p-0">
+            <table class="table table-sm mb-0">
+              <thead><tr><th>Date</th><th>Type</th><th>Invoice</th><th class="text-end">Amount $</th><th class="text-end">Balance $</th></tr></thead>
+              <tbody id="balanceRecentBody"></tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   </div>

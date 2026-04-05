@@ -288,6 +288,22 @@ app.get('/api/yearly/:year', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── SHIPMENTS & BALANCE ROUTES ───────────────────────────────
+
+app.get('/api/shipments', (req, res) => {
+  try {
+    const data = readFile('shipments.json') || [];
+    res.json(data);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/balance', (req, res) => {
+  try {
+    const data = readFile('balance.json') || {};
+    res.json(data);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // Serve index for all other routes
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
