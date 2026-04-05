@@ -85,6 +85,9 @@
           <input type="month" id="rangeTo" class="form-control form-control-sm" style="width:150px"/>
         </div>
         <div class="ms-auto d-flex align-items-center gap-3">
+          <button class="btn btn-sm btn-outline-secondary" id="dashSettingsBtn">
+            <i class="bi bi-sliders"></i> Edit Dashboard
+          </button>
           <button class="btn btn-sm btn-outline-primary" id="addTileBtn" style="display:none">
             <i class="bi bi-plus"></i> Add Tile
           </button>
@@ -96,11 +99,51 @@
       </div>
     </div>
 
+    <div class="dash-settings-panel mb-4" id="dashSettingsPanel" style="display:none">
+      <div class="row g-3 align-items-end">
+        <div class="col-md-3">
+          <label class="form-label form-label-sm">Tiles Per Row</label>
+          <select id="tileColsSelect" class="form-select form-select-sm">
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label form-label-sm">Tile Size</label>
+          <select id="tileSizeSelect" class="form-select form-select-sm">
+            <option value="sm">Small</option>
+            <option value="md">Medium</option>
+            <option value="lg">Large</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label form-label-sm">Revenue</label>
+          <input type="color" id="tileColorRevenue" class="form-control form-control-color"/>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label form-label-sm">Quantity</label>
+          <input type="color" id="tileColorQuantity" class="form-control form-control-color"/>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label form-label-sm">Expenses</label>
+          <input type="color" id="tileColorExpenses" class="form-control form-control-color"/>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label form-label-sm">Profit</label>
+          <input type="color" id="tileColorProfit" class="form-control form-control-color"/>
+        </div>
+        <div class="col-md-2">
+          <button class="btn btn-sm btn-outline-secondary w-100" id="dashSettingsReset">Reset</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Dynamic stat tiles (built by JS) -->
     <div class="row g-4 mb-4" id="dashTilesRow"></div>
 
     <!-- Charts -->
-    <div class="row g-4">
+    <div class="row g-4" id="dashboardChartsRow">
       <div class="col-lg-8">
         <div class="card">
           <div class="card-header" id="dashChartLabel">Revenue Chart</div>
@@ -120,7 +163,7 @@
     </div>
 
     <!-- Quick Stats -->
-    <div class="row g-4 mt-0">
+    <div class="row g-4 mt-0" id="dashboardQuickRow">
       <div class="col-12">
         <div class="card">
           <div class="card-header">Quick Stats</div>
@@ -163,9 +206,14 @@
           <span class="year-display" id="yearDisplay">2025</span>
           <button class="btn-year-nav" id="yearNext"><i class="bi bi-chevron-right"></i></button>
         </div>
-        <button class="btn btn-sm btn-success" id="saveAllBtn">
-          <i class="bi bi-check-all"></i> Save All
-        </button>
+        <div class="d-flex align-items-center gap-2">
+          <button class="btn btn-sm btn-outline-secondary" id="entryEditBtn">
+            <i class="bi bi-pencil-square"></i> Edit
+          </button>
+          <button class="btn btn-sm btn-success" id="saveAllBtn">
+            <i class="bi bi-check-all"></i> Save All
+          </button>
+        </div>
       </div>
       <!-- Month tabs -->
       <div class="sheet-tabs" id="sheetTabs"></div>
@@ -368,7 +416,7 @@
             </div>
           </div>
           <div class="card-body p-0">
-            <div style="overflow-x:auto">
+            <div class="shipments-scroll" id="shipmentsScroll">
               <table class="table table-hover table-sm mb-0" id="shipmentsTable">
                 <thead class="table-dark">
                   <tr>
@@ -380,6 +428,7 @@
                     <th class="text-end">Total $</th>
                     <th class="text-end">Payment $</th>
                     <th class="text-end">Running Balance $</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody id="shipmentsBody"></tbody>

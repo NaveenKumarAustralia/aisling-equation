@@ -297,6 +297,32 @@ app.get('/api/shipments', (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+app.put('/api/shipments/:index', (req, res) => {
+  try {
+    const idx = parseInt(req.params.index, 10);
+    const data = readFile('shipments.json') || [];
+    if (Number.isNaN(idx) || idx < 0 || idx >= data.length) {
+      return res.status(400).json({ error: 'Invalid row index' });
+    }
+
+    const row = req.body || {};
+    data[idx] = {
+      ...data[idx],
+      date: row.date || '',
+      type: row.type === 'payment' ? 'payment' : 'shipment',
+      invoice: row.invoice || '',
+      stock_value_usd: parseFloat(row.stock_value_usd) || 0,
+      shipping_usd: parseFloat(row.shipping_usd) || 0,
+      total_usd: parseFloat(row.total_usd) || 0,
+      amount_usd: parseFloat(row.amount_usd) || 0,
+      balance_after: row.balance_after === '' || row.balance_after == null ? null : (parseFloat(row.balance_after) || 0)
+    };
+
+    writeFile('shipments.json', data);
+    res.json({ success: true, row: data[idx] });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/balance', (req, res) => {
   try {
     const data = readFile('balance.json') || {};

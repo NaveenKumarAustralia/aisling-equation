@@ -4,7 +4,21 @@ const state = {
   year: new Date().getFullYear(),
   currentPage: 'dashboard',
   entryView: 'month',
-  charts: {}
+  charts: {},
+  sheetSelection: { anchor: null, cells: new Set() },
+  entryEditMode: false,
+  dashEditMode: false
+};
+
+const DEFAULT_DASH_LAYOUT = {
+  cols: 4,
+  size: 'md',
+  colors: {
+    revenue: '#22c55e',
+    quantity: '#3b82f6',
+    expenses: '#ef4444',
+    profit: '#8b5cf6'
+  }
 };
 
 const MONTHS = ['','January','February','March','April','May','June',
@@ -17,6 +31,17 @@ const fmtShort = n => { const v = Number(n || 0); return Math.abs(v) >= 1000 ? '
 const daysInMonth = (m, y) => new Date(y, m, 0).getDate();
 const weekday = (y, m, d) => ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date(y, m-1, d).getDay()];
 const periodLabel = () => `${MONTHS[state.month]} ${state.year}`;
+
+const toHex = n => n.toString(16).padStart(2, '0');
+function tintColor(hex, ratio = 0.86) {
+  const raw = (hex || '#4f6ef7').replace('#', '').trim();
+  const full = raw.length === 3 ? raw.split('').map(x => x + x).join('') : raw.padEnd(6, '0').slice(0, 6);
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  const mix = c => Math.round(c + (255 - c) * ratio);
+  return `#${toHex(mix(r))}${toHex(mix(g))}${toHex(mix(b))}`;
+}
 
 function showToast(msg, type = 'success') {
   const el = document.getElementById('toast');
@@ -73,6 +98,8 @@ function loadPage(page) {
 function initEntryPage() {
   buildSheetTabs();
   document.getElementById('yearDisplay').textContent = state.year;
+  initEntryEditButton();
+  applyEntryEditMode();
 
   document.getElementById('yearPrev').onclick = () => {
     state.year--;
@@ -91,6 +118,28 @@ function initEntryPage() {
 
   if (state.entryView === 'total') loadYearlyInEntry();
   else loadEntry();
+}
+
+function initEntryEditButton() {
+  const btn = document.getElementById('entryEditBtn');
+  if (!btn || btn._init) return;
+  btn._init = true;
+  btn.addEventListener('click', () => {
+    state.entryEditMode = !state.entryEditMode;
+    applyEntryEditMode();
+  });
+}
+
+function applyEntryEditMode() {
+  const container = document.querySelector('#page-entry .sheet-container');
+  const btn = document.getElementById('entryEditBtn');
+  if (container) container.classList.toggle('entry-locked', !state.entryEditMode);
+  if (btn) {
+    btn.className = state.entryEditMode ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-outline-secondary';
+    btn.innerHTML = state.entryEditMode
+      ? '<i class="bi bi-check2-square"></i> Done'
+      : '<i class="bi bi-pencil-square"></i> Edit';
+  }
 }
 
 function buildSheetTabs() {
@@ -231,9 +280,9 @@ function prevMo(y, m) { return m === 1 ? {year:y-1,month:12} : {year:y,month:m-1
 function nextMo(y, m) { return m === 12 ? {year:y+1,month:1} : {year:y,month:m+1}; }
 
 function computeRangeMonths() {
-  // Presets always anchor to today; custom uses the user's date inputs
-  const now = new Date();
-  const ty = now.getFullYear(), tm = now.getMonth() + 1;
+  // Presets anchor to currently selected month/year in sidebar.
+  const ty = state.year;
+  const tm = state.month;
   if (state.dashRange === 'thisMonth')  return [{year:ty, month:tm}];
   if (state.dashRange === 'lastMonth')  { return [prevMo(ty,tm)]; }
   if (['3m','6m','12m'].includes(state.dashRange)) {
@@ -256,14 +305,16 @@ function computeRangeMonths() {
 function dashRangeLabel(months) {
   if (!months.length) return '';
   const f = months[0], l = months[months.length-1];
-  const mo = x => MONTHS[x.month].slice(0,3) + ' ' + x.year;
-  if (state.dashRange === 'thisMonth')  return `${MONTHS[f.month]} ${f.year}`;
-  if (state.dashRange === 'lastMonth')  return `${MONTHS[f.month]} ${f.year}`;
-  if (state.dashRange === '3m')  return `Last 3 Months  (${mo(f)} – ${mo(l)})`;
-  if (state.dashRange === '6m')  return `Last 6 Months  (${mo(f)} – ${mo(l)})`;
-  if (state.dashRange === '12m') return `Last 12 Months  (${mo(f)} – ${mo(l)})`;
-  if (state.dashRange === 'custom') return `${mo(f)} – ${mo(l)}`;
-  return `${MONTHS[f.month]} ${f.year}`;
+  const fmtDay = (d, m, y) => `${String(d).padStart(2, '0')} ${MONTHS[m].slice(0,3)} ${y}`;
+  const from = fmtDay(1, f.month, f.year);
+  const to = fmtDay(daysInMonth(l.month, l.year), l.month, l.year);
+  if (state.dashRange === 'thisMonth')  return `${from} – ${to}`;
+  if (state.dashRange === 'lastMonth')  return `${from} – ${to}`;
+  if (state.dashRange === '3m')  return `Last 3 Months (${from} – ${to})`;
+  if (state.dashRange === '6m')  return `Last 6 Months (${from} – ${to})`;
+  if (state.dashRange === '12m') return `Last 12 Months (${from} – ${to})`;
+  if (state.dashRange === 'custom') return `${from} – ${to}`;
+  return `${from} – ${to}`;
 }
 
 async function fetchAggData(months) {
@@ -273,10 +324,24 @@ async function fetchAggData(months) {
   const totalStaffCost    = results.reduce((s,r) => s+(r.totalStaffCost||0), 0);
   const totalOtherExpenses= results.reduce((s,r) => s+(r.totalOtherExpenses||0), 0);
   const totalExpenses     = totalStaffCost + totalOtherExpenses;
-  const profit            = totalRevenue - totalExpenses;
   const allDaily          = results.flatMap(r => r.dailyData||[]);
   const activeDays        = allDaily.filter(d => d.revenue > 0).length;
   const avgDailyRevenue   = activeDays > 0 ? totalRevenue/activeDays : 0;
+
+  // Profit formula aligned with Data Entry row:
+  // per day: revenue - (revenue * 0.8) - dailyTotal
+  // where dailyTotal = (monthStaff + monthOtherExpenses) / daysInMonth
+  const profit = results.reduce((sum, r, idx) => {
+    const ym = months[idx] || {};
+    const dim = daysInMonth(ym.month || 1, ym.year || new Date().getFullYear());
+    const monthDailyTotal = ((r.totalStaffCost || 0) + (r.totalOtherExpenses || 0)) / dim;
+    const monthProfit = (r.dailyData || []).reduce((acc, day) => {
+      const rev = Number(day?.revenue || 0);
+      return acc + (rev - (rev * 0.8) - monthDailyTotal);
+    }, 0);
+    return sum + monthProfit;
+  }, 0);
+
   return { totalRevenue, totalQuantity, totalStaffCost, totalOtherExpenses, totalExpenses, profit, avgDailyRevenue, dailyData: allDaily, results };
 }
 
@@ -285,8 +350,19 @@ async function loadDashboard() {
     state.dashRange   = 'thisMonth';
     state.dashCompare = true;
     state.tileMetrics = JSON.parse(localStorage.getItem('aislingTiles') || '["revenue","quantity","expenses","profit"]');
+    state.dashLayout  = { ...DEFAULT_DASH_LAYOUT, ...(JSON.parse(localStorage.getItem('aislingDashLayout') || '{}')) };
+    state.dashLayout.colors = { ...DEFAULT_DASH_LAYOUT.colors, ...(state.dashLayout.colors || {}) };
+    state.dashLayout.spans = Array.isArray(state.dashLayout.spans) ? state.dashLayout.spans : [];
   }
   initDashBar();
+  syncDashSettingsUI();
+  const fromInp = document.getElementById('rangeFrom');
+  const toInp = document.getElementById('rangeTo');
+  const pad = n => String(n).padStart(2, '0');
+  if (state.dashRange !== 'custom') {
+    if (fromInp) fromInp.value = `${state.year}-${pad(state.month)}`;
+    if (toInp) toInp.value = `${state.year}-${pad(state.month)}`;
+  }
 
   const months = computeRangeMonths();
   document.getElementById('currentPeriodLabel').textContent = dashRangeLabel(months);
@@ -296,17 +372,12 @@ async function loadDashboard() {
     fetchAggData(months),
     state.dashCompare ? fetchAggData(cmpMonths) : Promise.resolve(null)
   ]);
+  state._lastDashData = data;
+  state._lastDashCmpData = cmpData;
 
   renderDashTiles(data, cmpData);
-  renderDashCharts(data, months);
-
-  const margin   = data.totalRevenue > 0 ? ((data.profit/data.totalRevenue)*100).toFixed(1) : 0;
-  const unitCost = data.totalQuantity > 0 ? data.totalExpenses/data.totalQuantity : 0;
-  document.getElementById('dash-avg').textContent       = fmt(data.avgDailyRevenue);
-  document.getElementById('dash-staff').textContent     = fmt(data.totalStaffCost);
-  document.getElementById('dash-other-exp').textContent = fmt(data.totalOtherExpenses);
-  document.getElementById('dash-margin').textContent    = margin + '%';
-  document.getElementById('dash-unit-cost').textContent = fmt(unitCost);
+  destroyChart('dashRevenue');
+  destroyChart('dashPie');
 }
 
 function initDashBar() {
@@ -331,7 +402,12 @@ function initDashBar() {
   };
 
   const atBtn = document.getElementById('addTileBtn');
-  if (atBtn) atBtn.onclick = () => addTile();
+  if (atBtn) atBtn.onclick = () => {
+    if (!state.dashEditMode) return;
+    addTile();
+  };
+  const dsBtn = document.getElementById('dashSettingsBtn');
+  if (dsBtn) dsBtn.onclick = () => setDashEditMode(!state.dashEditMode);
 
   const fromInp = document.getElementById('rangeFrom');
   const toInp   = document.getElementById('rangeTo');
@@ -349,21 +425,129 @@ function initDashBar() {
   };
   fromInp.onchange = onCustom;
   toInp.onchange   = onCustom;
+
+  initDashSettingsPanel();
+}
+
+function saveDashLayout() {
+  localStorage.setItem('aislingDashLayout', JSON.stringify(state.dashLayout));
+}
+
+function syncDashSettingsUI() {
+  const colsSel = document.getElementById('tileColsSelect');
+  const sizeSel = document.getElementById('tileSizeSelect');
+  const cRev = document.getElementById('tileColorRevenue');
+  const cQty = document.getElementById('tileColorQuantity');
+  const cExp = document.getElementById('tileColorExpenses');
+  const cPro = document.getElementById('tileColorProfit');
+  if (!colsSel || !sizeSel || !cRev || !cQty || !cExp || !cPro || !state.dashLayout) return;
+  colsSel.value = String(state.dashLayout.cols || DEFAULT_DASH_LAYOUT.cols);
+  sizeSel.value = state.dashLayout.size || DEFAULT_DASH_LAYOUT.size;
+  cRev.value = state.dashLayout.colors.revenue || DEFAULT_DASH_LAYOUT.colors.revenue;
+  cQty.value = state.dashLayout.colors.quantity || DEFAULT_DASH_LAYOUT.colors.quantity;
+  cExp.value = state.dashLayout.colors.expenses || DEFAULT_DASH_LAYOUT.colors.expenses;
+  cPro.value = state.dashLayout.colors.profit || DEFAULT_DASH_LAYOUT.colors.profit;
+}
+
+function defaultSpanForCols(cols) {
+  if (cols === 2) return 6;
+  if (cols === 3) return 4;
+  return 3;
+}
+
+function normalizeDashSpans() {
+  const cols = Number(state.dashLayout?.cols || DEFAULT_DASH_LAYOUT.cols);
+  const def = defaultSpanForCols(cols);
+  if (!Array.isArray(state.dashLayout.spans)) state.dashLayout.spans = [];
+  while (state.dashLayout.spans.length < state.tileMetrics.length) state.dashLayout.spans.push(def);
+  if (state.dashLayout.spans.length > state.tileMetrics.length) state.dashLayout.spans.length = state.tileMetrics.length;
+  state.dashLayout.spans = state.dashLayout.spans.map(v => {
+    const n = parseInt(v, 10);
+    return Number.isFinite(n) ? Math.max(1, Math.min(12, n)) : def;
+  });
+}
+
+function setDashEditMode(on) {
+  state.dashEditMode = !!on;
+  const row = document.getElementById('dashTilesRow');
+  const panel = document.getElementById('dashSettingsPanel');
+  const btn = document.getElementById('dashSettingsBtn');
+  const addBtn = document.getElementById('addTileBtn');
+  if (row) row.classList.toggle('dash-edit-mode', state.dashEditMode);
+  if (panel) panel.style.display = state.dashEditMode ? '' : 'none';
+  if (btn) btn.innerHTML = state.dashEditMode
+    ? '<i class="bi bi-check2-square"></i> Done'
+    : '<i class="bi bi-sliders"></i> Edit Dashboard';
+  if (addBtn) addBtn.style.display = state.dashEditMode ? '' : 'none';
+  renderDashTiles(state._lastDashData, state._lastDashCmpData);
+}
+
+function initDashSettingsPanel() {
+  const panel = document.getElementById('dashSettingsPanel');
+  if (!panel || panel._init) return;
+  panel._init = true;
+
+  const colsSel = document.getElementById('tileColsSelect');
+  const sizeSel = document.getElementById('tileSizeSelect');
+  const cRev = document.getElementById('tileColorRevenue');
+  const cQty = document.getElementById('tileColorQuantity');
+  const cExp = document.getElementById('tileColorExpenses');
+  const cPro = document.getElementById('tileColorProfit');
+  const resetBtn = document.getElementById('dashSettingsReset');
+
+  const apply = () => {
+    state.dashLayout.cols = parseInt(colsSel.value) || 4;
+    state.dashLayout.size = sizeSel.value || 'md';
+    state.dashLayout.spans = state.tileMetrics.map(() => defaultSpanForCols(state.dashLayout.cols));
+    state.dashLayout.colors.revenue = cRev.value;
+    state.dashLayout.colors.quantity = cQty.value;
+    state.dashLayout.colors.expenses = cExp.value;
+    state.dashLayout.colors.profit = cPro.value;
+    saveDashLayout();
+    renderDashTiles(state._lastDashData, state._lastDashCmpData);
+  };
+
+  [colsSel, sizeSel, cRev, cQty, cExp, cPro].forEach(el => {
+    el?.addEventListener('input', apply);
+    el?.addEventListener('change', apply);
+  });
+
+  if (resetBtn) resetBtn.onclick = () => {
+    state.dashLayout = JSON.parse(JSON.stringify(DEFAULT_DASH_LAYOUT));
+    state.dashLayout.spans = state.tileMetrics.map(() => defaultSpanForCols(state.dashLayout.cols));
+    saveDashLayout();
+    syncDashSettingsUI();
+    renderDashTiles(state._lastDashData, state._lastDashCmpData);
+  };
 }
 
 function renderDashTiles(data, cmpData) {
+  if (!data) return;
   const row = document.getElementById('dashTilesRow');
-  const n = state.tileMetrics.length;
-  const usedKeys = new Set(state.tileMetrics);
-  const hasMore = Object.keys(DASH_METRICS).some(k => !usedKeys.has(k));
+  if (!row) return;
 
-  // Show/hide Add Tile button in topbar
+  normalizeDashSpans();
+
+  const n = state.tileMetrics.length;
+  const layout = state.dashLayout || DEFAULT_DASH_LAYOUT;
+  const cols = Number(layout.cols || DEFAULT_DASH_LAYOUT.cols);
+  const sizeClass = layout.size === 'sm' ? 'tile-size-sm' : layout.size === 'lg' ? 'tile-size-lg' : '';
+  const usedKeys = new Set(state.tileMetrics.filter(Boolean));
+  const hasMore = Object.keys(DASH_METRICS).some(k => !usedKeys.has(k));
   const addBtn = document.getElementById('addTileBtn');
-  if (addBtn) addBtn.style.display = hasMore ? '' : 'none';
+  if (addBtn) addBtn.style.display = (state.dashEditMode && hasMore) ? '' : 'none';
+
+  row.classList.add('dash-grid');
+  row.classList.toggle('dash-edit-mode', !!state.dashEditMode);
 
   row.innerHTML = state.tileMetrics.map((key, i) => {
     const m = DASH_METRICS[key]; if (!m) return '';
     const val = m.val(data);
+    const colorKey = m.card === 'profit' || m.card === 'loss' ? 'profit' : m.card;
+    const base = layout.colors[colorKey] || DEFAULT_DASH_LAYOUT.colors[colorKey];
+    const bg = `linear-gradient(135deg, ${tintColor(base, 0.86)}, ${tintColor(base, 0.93)})`;
+    const iconBg = tintColor(base, 0.72);
+    const span = Math.max(1, Math.min(12, parseInt(layout.spans[i], 10) || defaultSpanForCols(cols)));
     let badge = '';
     if (cmpData && state.dashCompare) {
       const prev = m.val(cmpData);
@@ -373,18 +557,99 @@ function renderDashTiles(data, cmpData) {
         badge = `<span class="cmp-badge ${good ? 'cmp-good' : 'cmp-bad'}">${pct > 0 ? '▲' : '▼'} ${Math.abs(pct).toFixed(1)}% vs LY</span>`;
       }
     }
-    return `<div class="col-sm-6 col-lg-3">
-      <div class="stat-card tile-card ${m.card}" id="tile-${i}">
+    return `<div class="dash-grid-item" data-idx="${i}" style="grid-column: span ${span}">
+      <div class="stat-card tile-card ${m.card} ${sizeClass}" id="tile-${i}" style="background:${bg}">
         ${n > 1 ? `<button class="tile-del-btn" onclick="removeTile(${i})">×</button>` : ''}
         <button class="tile-cfg-btn" onclick="toggleTilePanel(${i})"><i class="bi bi-gear"></i></button>
-        <div class="stat-icon"><i class="bi ${m.icon}"></i></div>
+        <div class="stat-icon" style="background:${iconBg};color:${base}"><i class="bi ${m.icon}"></i></div>
         <div class="stat-label">${m.label}</div>
         <div class="stat-value" id="tileVal${i}">${m.fmt(val)}</div>
         <div class="tile-badge" id="tileBadge${i}">${badge}</div>
         <div class="tile-cfg-panel" id="tileCfgPanel${i}" style="display:none"></div>
+        <div class="tile-resize-handle" data-idx="${i}"></div>
       </div>
     </div>`;
   }).join('');
+
+  initDashboardTileInteractions(row);
+}
+
+function swapIndex(arr, from, to) {
+  if (!Array.isArray(arr) || from === to || from < 0 || to < 0 || from >= arr.length || to >= arr.length) return;
+  const [v] = arr.splice(from, 1);
+  arr.splice(to, 0, v);
+}
+
+function initDashboardTileInteractions(row) {
+  if (!row) return;
+  let dragIdx = null;
+  row.querySelectorAll('.dash-grid-item').forEach(item => {
+    const idx = parseInt(item.dataset.idx, 10);
+    item.draggable = !!state.dashEditMode;
+
+    item.addEventListener('dragstart', e => {
+      if (!state.dashEditMode) return e.preventDefault();
+      dragIdx = idx;
+      item.classList.add('dragging');
+      if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+    });
+
+    item.addEventListener('dragend', () => {
+      dragIdx = null;
+      item.classList.remove('dragging');
+      row.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target'));
+    });
+
+    item.addEventListener('dragover', e => {
+      if (!state.dashEditMode) return;
+      e.preventDefault();
+      item.classList.add('drop-target');
+    });
+
+    item.addEventListener('dragleave', () => item.classList.remove('drop-target'));
+
+    item.addEventListener('drop', e => {
+      if (!state.dashEditMode) return;
+      e.preventDefault();
+      item.classList.remove('drop-target');
+      const dropIdx = parseInt(item.dataset.idx, 10);
+      if (!Number.isFinite(dragIdx) || dragIdx === dropIdx) return;
+      swapIndex(state.tileMetrics, dragIdx, dropIdx);
+      swapIndex(state.dashLayout.spans, dragIdx, dropIdx);
+      saveDashLayout();
+      localStorage.setItem('aislingTiles', JSON.stringify(state.tileMetrics));
+      renderDashTiles(state._lastDashData, state._lastDashCmpData);
+    });
+  });
+
+  row.querySelectorAll('.tile-resize-handle').forEach(handle => {
+    handle.addEventListener('mousedown', e => {
+      if (!state.dashEditMode) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const idx = parseInt(handle.dataset.idx, 10);
+      if (!Number.isFinite(idx)) return;
+      const startX = e.clientX;
+      const startSpan = parseInt(state.dashLayout.spans[idx], 10) || defaultSpanForCols(Number(state.dashLayout.cols || 4));
+      const pxPerCol = Math.max(70, row.clientWidth / 12);
+
+      const onMove = ev => {
+        const delta = ev.clientX - startX;
+        const nextSpan = Math.max(1, Math.min(12, Math.round(startSpan + (delta / pxPerCol))));
+        state.dashLayout.spans[idx] = nextSpan;
+        const tile = row.querySelector(`.dash-grid-item[data-idx="${idx}"]`);
+        if (tile) tile.style.gridColumn = `span ${nextSpan}`;
+      };
+      const onUp = () => {
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+        saveDashLayout();
+      };
+
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+    });
+  });
 }
 
 function toggleTilePanel(idx) {
@@ -402,6 +667,8 @@ function toggleTilePanel(idx) {
 function setTileMetric(idx, key) {
   state.tileMetrics[idx] = key;
   localStorage.setItem('aislingTiles', JSON.stringify(state.tileMetrics));
+  normalizeDashSpans();
+  saveDashLayout();
   const panel = document.getElementById(`tileCfgPanel${idx}`);
   if (panel) panel.style.display = 'none';
   loadDashboard();
@@ -412,20 +679,28 @@ function addTile() {
   const next = Object.keys(DASH_METRICS).find(k => !usedKeys.has(k));
   if (!next) return;
   state.tileMetrics.push(next);
+  normalizeDashSpans();
   localStorage.setItem('aislingTiles', JSON.stringify(state.tileMetrics));
+  saveDashLayout();
   loadDashboard();
 }
 
 function removeTile(idx) {
   if (state.tileMetrics.length <= 1) return;
   state.tileMetrics.splice(idx, 1);
+  if (Array.isArray(state.dashLayout?.spans)) state.dashLayout.spans.splice(idx, 1);
   localStorage.setItem('aislingTiles', JSON.stringify(state.tileMetrics));
+  saveDashLayout();
   loadDashboard();
 }
 
 document.addEventListener('click', e => {
   if (!e.target.closest('.tile-cfg-btn') && !e.target.closest('.tile-cfg-panel'))
     document.querySelectorAll('.tile-cfg-panel').forEach(p => p.style.display = 'none');
+  if (state.dashEditMode && !e.target.closest('#dashSettingsBtn') && !e.target.closest('#dashSettingsPanel')) {
+    const panel = document.getElementById('dashSettingsPanel');
+    if (panel) panel.style.display = 'none';
+  }
 });
 
 function renderDashCharts(data, months) {
@@ -497,37 +772,51 @@ async function loadEntry() {
 // ── SHEET RENDERING ────────────────────────────────────────────
 
 function sheetDayCell(monthly, date, weClass) {
-  // Only show value when that day has been entered (input not blank)
-  const show = (date in state.dataMap) && monthly > 0;
+  // Show daily value whenever that day has data, including zero values
+  const show = (date in state.dataMap);
   return `<td class="col-day cell-calc${weClass}">${show ? fmtShort(monthly / state.days) : ''}</td>`;
+}
+
+function hasAnyDailyEntries() {
+  return Object.keys(state.dataMap || {}).length > 0;
+}
+
+function enteredDaysCount() {
+  return Object.keys(state.dataMap || {}).length;
 }
 
 function buildStaffRow(s) {
   const we = d => state.isWE(d) ? ' weekend' : '';
+  const showTotals = hasAnyDailyEntries();
+  const activeDays = enteredDaysCount();
   let r = `<tr class="row-staff" data-id="${s.id}">`;
   r += `<td class="col-sticky col-name"><span class="row-label">${s.name}</span>`;
   r += `<button class="btn-del-row" data-id="${s.id}" data-type="staff">×</button></td>`;
   r += `<td class="col-sticky col-monthly"><input type="number" class="monthly-input" data-id="${s.id}" data-type="staff" value="${s.monthly_salary}" min="0"/></td>`;
   state.dayNums.forEach(d => r += sheetDayCell(s.monthly_salary, state.dateFor(d), we(d)));
-  r += `<td class="col-total">${fmt(s.monthly_salary)}</td></tr>`;
+  r += `<td class="col-total">${showTotals ? fmt((s.monthly_salary / state.days) * activeDays) : ''}</td></tr>`;
   return r;
 }
 
 function buildExpRow(e) {
   const we = d => state.isWE(d) ? ' weekend' : '';
   const catAttr = encodeURIComponent(e.category);
+  const showTotals = hasAnyDailyEntries();
+  const activeDays = enteredDaysCount();
   let r = `<tr class="row-expense" data-cat="${catAttr}">`;
   r += `<td class="col-sticky col-name"><span class="row-label">${e.category}</span>`;
   r += `<button class="btn-del-row" data-cat="${catAttr}" data-type="expense">×</button></td>`;
   r += `<td class="col-sticky col-monthly"><input type="number" class="monthly-input" data-cat="${catAttr}" data-type="expense" value="${e.amount}" min="0"/></td>`;
   state.dayNums.forEach(d => r += sheetDayCell(e.amount, state.dateFor(d), we(d)));
-  r += `<td class="col-total">${fmt(e.amount)}</td></tr>`;
+  r += `<td class="col-total">${showTotals ? fmt((e.amount / state.days) * activeDays) : ''}</td></tr>`;
   return r;
 }
 
 function renderSheetBody(staff, expenses) {
   const { days, dayNums, dateFor, isWE, dataMap } = state;
   const we = d => isWE(d) ? ' weekend' : '';
+  const showTotals = hasAnyDailyEntries();
+  const activeDays = enteredDaysCount();
   const blank = `<tr class="row-blank"><td class="col-sticky col-name"></td><td class="col-sticky col-monthly"></td>${'<td></td>'.repeat(days)}<td></td></tr>`;
   const secHdr = t => `<tr class="row-section-header"><td class="col-sticky col-name" colspan="2">${t}</td>${'<td></td>'.repeat(days)}<td></td></tr>`;
   const addBtn = s => `<tr class="row-add-btn"><td class="col-sticky col-name" colspan="2"><button class="btn-add-row" data-section="${s}">＋ Add Row</button></td>${'<td></td>'.repeat(days)}<td></td></tr>`;
@@ -545,7 +834,7 @@ function renderSheetBody(staff, expenses) {
     const val = entry !== undefined ? entry.revenue : '';
     b += `<td class="col-day${we(d)}"><input type="number" class="sheet-input rev-input" data-date="${date}" value="${val}" min="0" placeholder="–"/></td>`;
   });
-  b += '<td class="col-total fw-bold" id="sheet-rev-total">₹0</td></tr>';
+  b += `<td class="col-total fw-bold" id="sheet-rev-total">${showTotals ? '₹0' : ''}</td></tr>`;
 
   // Quantity
   b += '<tr class="row-quantity"><td class="col-sticky col-name fw-bold">Total Quantity</td><td class="col-sticky col-monthly"></td>';
@@ -555,7 +844,7 @@ function renderSheetBody(staff, expenses) {
     const val = entry !== undefined ? entry.quantity : '';
     b += `<td class="col-day${we(d)}"><input type="number" class="sheet-input qty-input" data-date="${date}" value="${val}" min="0" placeholder="–"/></td>`;
   });
-  b += '<td class="col-total fw-bold" id="sheet-qty-total">0</td></tr>';
+  b += `<td class="col-total fw-bold" id="sheet-qty-total">${showTotals ? '0' : ''}</td></tr>`;
 
   b += blank;
 
@@ -568,10 +857,10 @@ function renderSheetBody(staff, expenses) {
   b += '<tr class="row-section-total" id="staff-total-row">';
   b += `<td class="col-sticky col-name fw-bold">Staff Total</td><td class="col-sticky col-monthly fw-bold">${fmt(staffTotal)}</td>`;
   dayNums.forEach(d => {
-    const show = (dateFor(d) in dataMap) && staffTotal > 0;
+    const show = (dateFor(d) in dataMap);
     b += `<td class="col-day cell-calc fw-bold${we(d)}">${show ? fmtShort(staffTotal / days) : ''}</td>`;
   });
-  b += `<td class="col-total fw-bold">${fmt(staffTotal)}</td></tr>`;
+  b += `<td class="col-total fw-bold">${showTotals ? fmt((staffTotal / days) * activeDays) : ''}</td></tr>`;
   b += blank;
 
   // Expenses section
@@ -583,10 +872,10 @@ function renderSheetBody(staff, expenses) {
   b += '<tr class="row-section-total" id="exp-total-row">';
   b += `<td class="col-sticky col-name fw-bold">Expenses Total</td><td class="col-sticky col-monthly fw-bold">${fmt(expTotal)}</td>`;
   dayNums.forEach(d => {
-    const show = (dateFor(d) in dataMap) && expTotal > 0;
+    const show = (dateFor(d) in dataMap);
     b += `<td class="col-day cell-calc fw-bold${we(d)}">${show ? fmtShort(expTotal / days) : ''}</td>`;
   });
-  b += `<td class="col-total fw-bold">${fmt(expTotal)}</td></tr>`;
+  b += `<td class="col-total fw-bold">${showTotals ? fmt((expTotal / days) * activeDays) : ''}</td></tr>`;
   b += blank;
 
   // Profit row
@@ -595,23 +884,236 @@ function renderSheetBody(staff, expenses) {
     const date = dateFor(d);
     if (date in dataMap) {
       const rev = dataMap[date].revenue || 0;
-      const p = rev - staffTotal / days - expTotal / days;
+      const dayTotal = (staffTotal / days) + (expTotal / days);
+      const p = rev - (rev * 0.8) - dayTotal;
       b += `<td class="col-day cell-profit${we(d)} ${p >= 0 ? 'positive' : 'negative'}" data-day="${d}">${fmtShort(p)}</td>`;
     } else {
       b += `<td class="col-day cell-profit${we(d)}" data-day="${d}"></td>`;
     }
   });
-  const totRev = Object.values(dataMap).reduce((s, d) => s + (d.revenue || 0), 0);
-  const totProfit = totRev - staffTotal - expTotal;
-  b += `<td class="col-total fw-bold ${totProfit >= 0 ? 'text-profit' : 'text-loss'}" id="sheet-profit-total">${fmt(totProfit)}</td></tr>`;
+  const totProfit = Object.entries(dataMap).reduce((sum, [, day]) => {
+    const rev = day?.revenue || 0;
+    const dayTotal = (staffTotal / days) + (expTotal / days);
+    return sum + (rev - (rev * 0.8) - dayTotal);
+  }, 0);
+  b += `<td class="col-total fw-bold ${totProfit >= 0 ? 'text-profit' : 'text-loss'}" id="sheet-profit-total">${showTotals ? fmt(totProfit) : ''}</td></tr>`;
 
   const tbody = document.getElementById('sheetBody');
   tbody.innerHTML = b;
+  normalizeStickyColumns();
+  clearSheetSelection();
   refreshRevQtyTotals();
   attachSheetEvents(tbody);
+  applyEntryEditMode();
+  applySheetFreeze();
+  requestAnimationFrame(applySheetFreeze);
+}
+
+function normalizeStickyColumns() {
+  const thead = document.getElementById('sheetHead');
+  const tbody = document.getElementById('sheetBody');
+  if (thead) {
+    Array.from(thead.rows).forEach(tr => {
+      const c1 = tr.cells[0];
+      const c2 = tr.cells[1];
+      if (c1) c1.classList.add('col-sticky', 'col-name');
+      if (c2) c2.classList.add('col-sticky', 'col-monthly');
+    });
+  }
+  if (!tbody) return;
+  Array.from(tbody.rows).forEach(tr => {
+    const c1 = tr.cells[0];
+    const c2 = tr.cells[1];
+    if (c1) c1.classList.add('col-sticky', 'col-name');
+    // Skip rows where first cell spans both frozen columns (section headers/add rows)
+    if (c2 && (c1?.colSpan || 1) === 1) c2.classList.add('col-sticky', 'col-monthly');
+  });
 }
 
 // ── SHEET EVENTS ───────────────────────────────────────────────
+
+function applySheetFreeze() {
+  const thead = document.getElementById('sheetHead');
+  const tbody = document.getElementById('sheetBody');
+  if (!thead || !tbody) return;
+
+  const headRows = Array.from(thead.querySelectorAll('tr'));
+  headRows.forEach(tr => {
+    tr.classList.remove('freeze-head-row');
+    tr.style.removeProperty('--freeze-top');
+  });
+
+  let top = 0;
+  headRows.forEach(tr => {
+    tr.classList.add('freeze-head-row');
+    tr.style.setProperty('--freeze-top', `${Math.round(top)}px`);
+    top += tr.getBoundingClientRect().height;
+  });
+
+  const rows = Array.from(tbody.querySelectorAll('tr'));
+  rows.forEach(tr => {
+    tr.classList.remove('frozen-row');
+    tr.style.removeProperty('--freeze-top');
+  });
+
+  const frozenRows = rows.slice(0, 2); // Revenue + Quantity rows
+  frozenRows.forEach(tr => {
+    tr.classList.add('frozen-row');
+    tr.style.setProperty('--freeze-top', `${Math.round(top)}px`);
+    top += tr.getBoundingClientRect().height;
+  });
+}
+
+function clearSheetSelection() {
+  state.sheetSelection.cells.forEach(cell => cell.classList.remove('cell-selected'));
+  state.sheetSelection.cells.clear();
+  state.sheetSelection.anchor = null;
+}
+
+function getCellLogicalCoords(cell) {
+  const tr = cell.closest('tr');
+  const rowEl = tr?.parentElement;
+  if (!tr || !rowEl) return null;
+  const row = Array.from(rowEl.children).indexOf(tr);
+  let col = 0;
+  Array.from(tr.cells).some(c => {
+    if (c === cell) return true;
+    col += c.colSpan || 1;
+    return false;
+  });
+  return { row, col };
+}
+
+function getCellsInRange(tbody, from, to) {
+  const minRow = Math.min(from.row, to.row);
+  const maxRow = Math.max(from.row, to.row);
+  const minCol = Math.min(from.col, to.col);
+  const maxCol = Math.max(from.col, to.col);
+  const rows = Array.from(tbody.rows);
+  const out = [];
+
+  for (let r = minRow; r <= maxRow; r++) {
+    const tr = rows[r];
+    if (!tr) continue;
+    let colCursor = 0;
+    Array.from(tr.cells).forEach(cell => {
+      const span = cell.colSpan || 1;
+      const cStart = colCursor;
+      const cEnd = cStart + span - 1;
+      if (cEnd >= minCol && cStart <= maxCol) out.push(cell);
+      colCursor += span;
+    });
+  }
+  return out;
+}
+
+function addCellsToSelection(cells) {
+  cells.forEach(cell => {
+    state.sheetSelection.cells.add(cell);
+    cell.classList.add('cell-selected');
+  });
+}
+
+function setSingleSelection(cell) {
+  clearSheetSelection();
+  addCellsToSelection([cell]);
+  state.sheetSelection.anchor = getCellLogicalCoords(cell);
+}
+
+function toggleCellSelection(cell) {
+  if (state.sheetSelection.cells.has(cell)) {
+    state.sheetSelection.cells.delete(cell);
+    cell.classList.remove('cell-selected');
+  } else {
+    state.sheetSelection.cells.add(cell);
+    cell.classList.add('cell-selected');
+  }
+  state.sheetSelection.anchor = getCellLogicalCoords(cell);
+}
+
+function selectRangeToCell(tbody, cell, additive = false) {
+  const target = getCellLogicalCoords(cell);
+  if (!target) return;
+  const anchor = state.sheetSelection.anchor || target;
+  const rangeCells = getCellsInRange(tbody, anchor, target);
+  if (!additive) clearSheetSelection();
+  addCellsToSelection(rangeCells);
+  state.sheetSelection.anchor = anchor;
+}
+
+async function saveInlineNameChange(tr, oldName, newName) {
+  if (!newName || newName === oldName) return { ok: true, name: oldName };
+  if (tr.classList.contains('row-staff')) {
+    const inp = tr.querySelector('.monthly-input[data-type="staff"]');
+    const id = inp?.dataset?.id;
+    const monthlySalary = parseFloat(inp?.value) || 0;
+    if (!id) return { ok: false };
+    await api(`/api/staff/${id}`, 'PUT', { name: newName, monthly_salary: monthlySalary });
+    return { ok: true, name: newName };
+  }
+  if (tr.classList.contains('row-expense')) {
+    const inp = tr.querySelector('.monthly-input[data-type="expense"]');
+    const delBtn = tr.querySelector('.btn-del-row[data-type="expense"]');
+    const oldCat = decodeURIComponent(inp?.dataset?.cat || oldName);
+    const amount = parseFloat(inp?.value) || 0;
+    await api(`/api/expenses/${state.year}/${state.month}/${encodeURIComponent(oldCat)}`, 'DELETE');
+    await api('/api/expenses', 'POST', { year: state.year, month: state.month, category: newName, amount });
+    const enc = encodeURIComponent(newName);
+    tr.dataset.cat = enc;
+    if (inp) inp.dataset.cat = enc;
+    if (delBtn) delBtn.dataset.cat = enc;
+    return { ok: true, name: newName };
+  }
+  return { ok: false };
+}
+
+function startInlineNameEdit(labelEl) {
+  if (!state.entryEditMode) return;
+  const tr = labelEl.closest('tr');
+  if (!tr) return;
+  if (!tr.classList.contains('row-staff') && !tr.classList.contains('row-expense')) return;
+  if (tr.querySelector('.row-name-input')) return;
+
+  const oldName = (labelEl.textContent || '').trim();
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'row-name-input';
+  input.value = oldName;
+  labelEl.replaceWith(input);
+  input.focus();
+  input.select();
+
+  let done = false;
+  const finish = async (save) => {
+    if (done) return;
+    done = true;
+    const newLabel = document.createElement('span');
+    newLabel.className = 'row-label';
+    try {
+      const newName = input.value.trim();
+      const targetName = save ? newName : oldName;
+      if (save && targetName) {
+        const res = await saveInlineNameChange(tr, oldName, targetName);
+        newLabel.textContent = res.ok ? (res.name || oldName) : oldName;
+        if (res.ok && targetName !== oldName) showToast('Name updated');
+        if (!res.ok) showToast('Unable to update name', 'danger');
+      } else {
+        newLabel.textContent = oldName;
+      }
+    } catch (err) {
+      console.error(err);
+      newLabel.textContent = oldName;
+      showToast('Unable to update name', 'danger');
+    }
+    input.replaceWith(newLabel);
+  };
+
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') input.blur();
+    if (e.key === 'Escape') finish(false);
+  });
+  input.addEventListener('blur', () => finish(true));
+}
 
 function attachSheetEvents(tbody) {
   if (tbody._sheetEventsAttached) return;
@@ -643,6 +1145,39 @@ function attachSheetEvents(tbody) {
     }
   });
 
+  // Prevent arrow keys from incrementing number values
+  tbody.addEventListener('keydown', e => {
+    const inp = e.target;
+    if (!(inp instanceof HTMLInputElement)) return;
+    if (inp.type !== 'number') return;
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault();
+  });
+
+  // Spreadsheet-like multi-select:
+  // - Click: single cell
+  // - Shift+Click: range from anchor
+  // - Cmd/Ctrl+Click: toggle cell in selection
+  // - Cmd/Ctrl+Shift+Click: add range
+  tbody.addEventListener('mousedown', e => {
+    const cell = e.target.closest('td');
+    if (!cell) return;
+    if (e.target.closest('button')) return;
+    if (e.target.closest('input,textarea,select,.row-label')) return;
+
+    const withMeta = e.metaKey || e.ctrlKey;
+    if (e.shiftKey) {
+      e.preventDefault();
+      selectRangeToCell(tbody, cell, withMeta);
+      return;
+    }
+    if (withMeta) {
+      e.preventDefault();
+      toggleCellSelection(cell);
+      return;
+    }
+    setSingleSelection(cell);
+  });
+
   // Revenue / qty input → update dataMap + refresh day column
   tbody.addEventListener('input', e => {
     const inp = e.target;
@@ -657,6 +1192,7 @@ function attachSheetEvents(tbody) {
       delete state.dataMap[date];
     }
     refreshDayColumn(dayNum);
+    refreshSectionTotals();
     refreshRevQtyTotals();
     refreshProfitTotal();
   });
@@ -665,9 +1201,14 @@ function attachSheetEvents(tbody) {
   tbody.addEventListener('change', async e => {
     const inp = e.target;
     if (!inp.classList.contains('monthly-input') || inp.classList.contains('new-monthly')) return;
+    if (!state.entryEditMode) {
+      inp.value = inp.defaultValue;
+      return;
+    }
     const amount = parseFloat(inp.value) || 0;
     const tr = inp.closest('tr');
-    tr.cells[tr.cells.length - 1].textContent = fmt(amount); // update row total
+    const activeDays = enteredDaysCount();
+    tr.cells[tr.cells.length - 1].textContent = hasAnyDailyEntries() ? fmt((amount / state.days) * activeDays) : ''; // update row total
 
     if (inp.dataset.type === 'staff') {
       const name = tr.querySelector('.row-label').textContent;
@@ -678,12 +1219,14 @@ function attachSheetEvents(tbody) {
     }
     refreshSectionTotals();
     refreshAllDayColumns();
+    inp.defaultValue = String(amount);
   });
 
   // Delete row
   tbody.addEventListener('click', async e => {
     const btn = e.target.closest('.btn-del-row');
     if (!btn) return;
+    if (!state.entryEditMode) return;
     if (!confirm('Delete this row?')) return;
     if (btn.dataset.type === 'staff') {
       await api(`/api/staff/${btn.dataset.id}`, 'DELETE');
@@ -699,11 +1242,39 @@ function attachSheetEvents(tbody) {
   // Add row
   tbody.addEventListener('click', e => {
     const btn = e.target.closest('.btn-add-row');
+    if (!state.entryEditMode) return;
     if (btn) insertNewRow(btn.dataset.section, btn.closest('tr'));
+  });
+
+  // Inline rename in first column (click directly on text)
+  tbody.addEventListener('click', e => {
+    const labelEl = e.target.closest('.row-label');
+    if (!labelEl) return;
+    if (!state.entryEditMode) return;
+    e.preventDefault();
+    e.stopPropagation();
+    startInlineNameEdit(labelEl);
   });
 }
 
+window.addEventListener('resize', () => {
+  if (state.currentPage === 'entry' && state.entryView !== 'total') applySheetFreeze();
+});
+
+const sheetScrollEl = document.getElementById('sheetScroll');
+if (sheetScrollEl) {
+  sheetScrollEl.addEventListener('scroll', () => {
+    if (state.currentPage === 'entry' && state.entryView !== 'total') applySheetFreeze();
+  }, { passive: true });
+}
+
+document.addEventListener('mousedown', e => {
+  const inSheet = e.target.closest('#sheetTable');
+  if (!inSheet) clearSheetSelection();
+});
+
 function insertNewRow(section, addBtnRow) {
+  if (!state.entryEditMode) return;
   const { days, dayNums, isWE } = state;
   const isStaff = section === 'staff';
   const emptyCells = dayNums.map(d => `<td class="col-day cell-calc${isWE(d) ? ' weekend' : ''}"></td>`).join('');
@@ -766,7 +1337,7 @@ function refreshDayColumn(dayNum) {
   });
 
   const stRow = document.getElementById('staff-total-row');
-  if (stRow?.cells[ci]) stRow.cells[ci].textContent = hasEntry && staffTotal > 0 ? fmtShort(staffTotal / days) : '';
+  if (stRow?.cells[ci]) stRow.cells[ci].textContent = hasEntry ? fmtShort(staffTotal / days) : '';
 
   document.querySelectorAll('.row-expense:not(.row-blank)').forEach(tr => {
     if (!tr.cells[ci]) return;
@@ -775,13 +1346,14 @@ function refreshDayColumn(dayNum) {
   });
 
   const etRow = document.getElementById('exp-total-row');
-  if (etRow?.cells[ci]) etRow.cells[ci].textContent = hasEntry && expTotal > 0 ? fmtShort(expTotal / days) : '';
+  if (etRow?.cells[ci]) etRow.cells[ci].textContent = hasEntry ? fmtShort(expTotal / days) : '';
 
   const profCell = document.querySelector(`.cell-profit[data-day="${dayNum}"]`);
   if (profCell) {
     if (hasEntry) {
       const rev = parseFloat(document.querySelector(`.rev-input[data-date="${date}"]`)?.value) || 0;
-      const p = rev - staffTotal / days - expTotal / days;
+      const dayTotal = (staffTotal / days) + (expTotal / days);
+      const p = rev - (rev * 0.8) - dayTotal;
       profCell.textContent = fmtShort(p);
       profCell.className = `col-day cell-profit${isWE(dayNum) ? ' weekend' : ''} ${p >= 0 ? 'positive' : 'negative'}`;
     } else {
@@ -799,27 +1371,40 @@ function refreshSectionTotals() {
   // Updates the monthly + total cells of the section total rows
   const staffTotal = getStaffTotal();
   const expTotal   = getExpTotal();
+  const showTotals = hasAnyDailyEntries();
+  const activeDays = enteredDaysCount();
   const stRow = document.getElementById('staff-total-row');
-  if (stRow) { stRow.cells[1].textContent = fmt(staffTotal); stRow.cells[stRow.cells.length - 1].textContent = fmt(staffTotal); }
+  if (stRow) { stRow.cells[1].textContent = fmt(staffTotal); stRow.cells[stRow.cells.length - 1].textContent = showTotals ? fmt((staffTotal / state.days) * activeDays) : ''; }
   const etRow = document.getElementById('exp-total-row');
-  if (etRow) { etRow.cells[1].textContent = fmt(expTotal); etRow.cells[etRow.cells.length - 1].textContent = fmt(expTotal); }
+  if (etRow) { etRow.cells[1].textContent = fmt(expTotal); etRow.cells[etRow.cells.length - 1].textContent = showTotals ? fmt((expTotal / state.days) * activeDays) : ''; }
+
+  document.querySelectorAll('.row-staff .col-total, .row-expense .col-total').forEach(cell => {
+    const tr = cell.closest('tr');
+    const m = parseFloat(tr?.querySelector('.monthly-input')?.value) || 0;
+    cell.textContent = showTotals ? fmt((m / state.days) * activeDays) : '';
+  });
 }
 
 function refreshRevQtyTotals() {
+  const showTotals = hasAnyDailyEntries();
   let rev = 0, qty = 0;
   document.querySelectorAll('.rev-input').forEach(i => rev += parseFloat(i.value) || 0);
   document.querySelectorAll('.qty-input').forEach(i => qty += parseFloat(i.value) || 0);
-  const re = document.getElementById('sheet-rev-total'); if (re) re.textContent = fmt(rev);
-  const qe = document.getElementById('sheet-qty-total'); if (qe) qe.textContent = fmtNum(qty);
+  const re = document.getElementById('sheet-rev-total'); if (re) re.textContent = showTotals ? fmt(rev) : '';
+  const qe = document.getElementById('sheet-qty-total'); if (qe) qe.textContent = showTotals ? fmtNum(qty) : '';
 }
 
 function refreshProfitTotal() {
+  const showTotals = hasAnyDailyEntries();
   const staffTotal = getStaffTotal();
   const expTotal   = getExpTotal();
-  const totRev = Object.values(state.dataMap).reduce((s, d) => s + (d.revenue || 0), 0);
-  const totProfit = totRev - staffTotal - expTotal;
+  const dayTotal = (staffTotal / state.days) + (expTotal / state.days);
+  const totProfit = Object.entries(state.dataMap || {}).reduce((sum, [, day]) => {
+    const rev = day?.revenue || 0;
+    return sum + (rev - (rev * 0.8) - dayTotal);
+  }, 0);
   const el = document.getElementById('sheet-profit-total');
-  if (el) { el.textContent = fmt(totProfit); el.className = `col-total fw-bold ${totProfit >= 0 ? 'text-profit' : 'text-loss'}`; }
+  if (el) { el.textContent = showTotals ? fmt(totProfit) : ''; el.className = `col-total fw-bold ${totProfit >= 0 ? 'text-profit' : 'text-loss'}`; }
 }
 
 async function saveAll() {
@@ -1095,18 +1680,48 @@ async function loadShipments() {
   }
 }
 
+function shipmentRowNumber(v) {
+  if (v === '' || v == null) return '';
+  const n = Number(v);
+  return Number.isFinite(n) ? n : '';
+}
+
+function escAttr(v) {
+  return String(v ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function shipmentRowNumInput(v) {
+  if (v === null || v === undefined) return '';
+  const n = Number(v);
+  return Number.isFinite(n) ? String(n) : '';
+}
+
+async function saveShipmentRow(rowIndex, tr) {
+  const payload = {
+    date: tr.querySelector('[data-f="date"]')?.value || '',
+    type: tr.querySelector('[data-f="type"]')?.value || 'shipment',
+    invoice: tr.querySelector('[data-f="invoice"]')?.value || '',
+    stock_value_usd: shipmentRowNumber(tr.querySelector('[data-f="stock_value_usd"]')?.value),
+    shipping_usd: shipmentRowNumber(tr.querySelector('[data-f="shipping_usd"]')?.value),
+    total_usd: shipmentRowNumber(tr.querySelector('[data-f="total_usd"]')?.value),
+    amount_usd: shipmentRowNumber(tr.querySelector('[data-f="amount_usd"]')?.value),
+    balance_after: tr.querySelector('[data-f="balance_after"]')?.value || ''
+  };
+
+  const res = await api(`/api/shipments/${rowIndex}`, 'PUT', payload);
+  if (res?.error) throw new Error(res.error);
+  _shipmentsData[rowIndex] = { ..._shipmentsData[rowIndex], ...payload };
+}
+
 function renderShipmentsTable(data) {
   const search = (document.getElementById('shipmentsSearch')?.value || '').toLowerCase();
   const filter = document.getElementById('shipmentsFilter')?.value || 'all';
 
-  const fmtUSD = n => '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const fmtBal = n => {
-    const v = Number(n || 0);
-    const s = '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    return v < 0 ? `<span class="text-danger">(${s})</span>` : `<span class="text-success">${s}</span>`;
-  };
-
-  let rows = data.filter(r => {
+  let rows = data.map((r, idx) => ({ ...r, _idx: idx })).filter(r => {
     if (filter !== 'all' && r.type !== filter) return false;
     if (search) {
       const hay = `${r.date||''} ${r.invoice||''} ${r.type}`.toLowerCase();
@@ -1117,33 +1732,50 @@ function renderShipmentsTable(data) {
 
   const tbody = document.getElementById('shipmentsBody');
   tbody.innerHTML = rows.map(r => {
-    const typeLabel = r.type === 'shipment'
-      ? '<span class="badge bg-primary">Shipment</span>'
-      : '<span class="badge bg-success">Payment</span>';
-    if (r.type === 'shipment') {
-      return `<tr>
-        <td>${r.date || '—'}</td>
-        <td>${typeLabel}</td>
-        <td><code>${r.invoice || ''}</code></td>
-        <td class="text-end">${fmtUSD(r.stock_value_usd)}</td>
-        <td class="text-end text-muted">${r.shipping_usd ? fmtUSD(r.shipping_usd) : '—'}</td>
-        <td class="text-end fw-bold">${fmtUSD(r.total_usd)}</td>
-        <td class="text-end text-muted">—</td>
-        <td class="text-end">${r.balance_after != null ? fmtBal(r.balance_after) : '—'}</td>
-      </tr>`;
-    } else {
-      return `<tr class="table-success bg-opacity-25">
-        <td>${r.date || '—'}</td>
-        <td>${typeLabel}</td>
-        <td class="text-muted">—</td>
-        <td class="text-end text-muted">—</td>
-        <td class="text-end text-muted">—</td>
-        <td class="text-end text-muted">—</td>
-        <td class="text-end fw-bold text-success">${fmtUSD(r.amount_usd)}</td>
-        <td class="text-end">${r.balance_after != null ? fmtBal(r.balance_after) : '—'}</td>
-      </tr>`;
-    }
+    const isPayment = r.type === 'payment';
+    return `<tr data-idx="${r._idx}" class="${isPayment ? 'table-success bg-opacity-25' : ''}">
+      <td><input type="date" class="form-control form-control-sm" data-f="date" value="${escAttr(r.date || '')}"></td>
+      <td>
+        <select class="form-select form-select-sm" data-f="type">
+          <option value="shipment" ${r.type === 'shipment' ? 'selected' : ''}>Shipment</option>
+          <option value="payment" ${r.type === 'payment' ? 'selected' : ''}>Payment</option>
+        </select>
+      </td>
+      <td><input type="text" class="form-control form-control-sm" data-f="invoice" value="${escAttr(r.invoice || '')}"></td>
+      <td><input type="number" step="0.01" class="form-control form-control-sm text-end" data-f="stock_value_usd" value="${shipmentRowNumInput(r.stock_value_usd)}"></td>
+      <td><input type="number" step="0.01" class="form-control form-control-sm text-end" data-f="shipping_usd" value="${shipmentRowNumInput(r.shipping_usd)}"></td>
+      <td><input type="number" step="0.01" class="form-control form-control-sm text-end" data-f="total_usd" value="${shipmentRowNumInput(r.total_usd)}"></td>
+      <td><input type="number" step="0.01" class="form-control form-control-sm text-end" data-f="amount_usd" value="${shipmentRowNumInput(r.amount_usd)}"></td>
+      <td><input type="number" step="0.01" class="form-control form-control-sm text-end" data-f="balance_after" value="${shipmentRowNumInput(r.balance_after)}"></td>
+      <td><button class="btn btn-sm btn-primary btn-save-shipment">Save</button></td>
+    </tr>`;
   }).join('');
+
+  if (!tbody._initSaveHandlers) {
+    tbody._initSaveHandlers = true;
+    tbody.addEventListener('click', async e => {
+      const btn = e.target.closest('.btn-save-shipment');
+      if (!btn) return;
+      const tr = btn.closest('tr');
+      const rowIndex = parseInt(tr?.dataset?.idx || '-1', 10);
+      if (!tr || rowIndex < 0) return;
+      const prev = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+      try {
+        await saveShipmentRow(rowIndex, tr);
+        btn.textContent = 'Saved';
+        setTimeout(() => { btn.textContent = prev; }, 800);
+        showToast('Shipment row updated');
+      } catch (err) {
+        console.error(err);
+        btn.textContent = prev;
+        showToast('Unable to save shipment row', 'danger');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  }
 }
 
 // ── BALANCE ────────────────────────────────────────────────────
