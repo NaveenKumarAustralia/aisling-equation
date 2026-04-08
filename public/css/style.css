@@ -265,6 +265,9 @@ body { background: var(--bg); font-family: 'Segoe UI', system-ui, sans-serif; di
   padding: 0;
 }
 
+/* Base layer for scrollable body cells */
+.sheet-table tbody td { position: relative; z-index: 1; }
+
 .col-name  { width: var(--sheet-col-name-w); min-width: var(--sheet-col-name-w); padding: 6px 10px; }
 .col-monthly { width: var(--sheet-col-monthly-w); min-width: var(--sheet-col-monthly-w); text-align: right; padding: 6px 8px; }
 .col-day   { width: 58px; min-width: 58px; text-align: center; padding: 3px 2px; }
@@ -302,11 +305,11 @@ body { background: var(--bg); font-family: 'Segoe UI', system-ui, sans-serif; di
 .sheet-table tr.frozen-row > td {
   position: sticky;
   top: var(--freeze-top, 0);
-  z-index: 12;
+  z-index: 20;
 }
 .sheet-table tr.frozen-row > td.col-sticky,
 .sheet-table tr.frozen-row > td.col-name,
-.sheet-table tr.frozen-row > td.col-monthly { z-index: 14; }
+.sheet-table tr.frozen-row > td.col-monthly { z-index: 28; }
 .sheet-table tr.frozen-row > td.col-name {
   position: -webkit-sticky !important;
   position: sticky !important;
@@ -317,8 +320,14 @@ body { background: var(--bg); font-family: 'Segoe UI', system-ui, sans-serif; di
   position: -webkit-sticky !important;
   position: sticky !important;
   left: var(--sheet-col-name-w) !important;
-  z-index: 26 !important;
+  z-index: 30 !important;
 }
+
+/* Ensure frozen top rows are opaque so scrolling data stays behind them */
+.sheet-table tr.frozen-row.row-revenue > td { background: #f0fdf4 !important; }
+.sheet-table tr.frozen-row.row-revenue > td.weekend { background: #dcfce7 !important; }
+.sheet-table tr.frozen-row.row-quantity > td { background: #eff6ff !important; }
+.sheet-table tr.frozen-row.row-quantity > td.weekend { background: #dbeafe !important; }
 
 /* Header rows */
 .row-dates th   { background: #C1654A !important; color: white; font-weight: 700; text-align: center; padding: 8px 4px; }

@@ -80,6 +80,30 @@ function nextId(arr) {
   return arr.length === 0 ? 1 : Math.max(...arr.map(s => s.id)) + 1;
 }
 
+let _sheetTotalsCache = null;
+function loadSheetTotalsIndex() {
+  if (_sheetTotalsCache) return _sheetTotalsCache;
+  const raw = readFile('sheet_monthly_totals.json');
+  const idx = new Map();
+  const list = Array.isArray(raw?.totals) ? raw.totals : [];
+  list.forEach(t => {
+    const key = `${Number(t.year)}-${String(Number(t.month)).padStart(2,'0')}`;
+    idx.set(key, {
+      revenue: Number(t.revenue || 0),
+      quantity: Number(t.quantity || 0),
+      staffCost: Number(t.staffCost || 0),
+      otherExpenses: Number(t.otherExpenses || 0),
+      profit: Number(t.profit || 0)
+    });
+  });
+  _sheetTotalsCache = idx;
+  return idx;
+}
+function getSheetMonthTotal(year, month) {
+  const idx = loadSheetTotalsIndex();
+  return idx.get(`${Number(year)}-${String(Number(month)).padStart(2,'0')}`) || null;
+}
+
 // ── MIDDLEWARE ─────────────────────────────────────────────────
 app.use(express.json());
 app.use(express.static('public'));
@@ -243,16 +267,43 @@ app.get('/api/analysis/:year/:month', async (req, res) => {
       staff = getStaff().filter(s => s.active !== false);
       expenses = Object.values(getExpenses(year, month));
     }
-    const totalRevenue = dailyData.reduce((s,d) => s+(d.revenue||0), 0);
-    const totalQuantity = dailyData.reduce((s,d) => s+(d.quantity||0), 0);
-    const totalStaffCost = staff.reduce((s,st) => s+st.monthly_salary, 0);
-    const totalOtherExpenses = expenses.reduce((s,e) => s+e.amount, 0);
-    const totalExpenses = totalStaffCost + totalOtherExpenses;
-    const profit = totalRevenue - totalExpenses;
+    let totalRevenue = dailyData.reduce((s,d) => s+(d.revenue||0), 0);
+    let totalQuantity = dailyData.reduce((s,d) => s+(d.quantity||0), 0);
+
+    const fullStaffCost = staff.reduce((s,st) => s+st.monthly_salary, 0);
+    const fullOtherExpenses = expenses.reduce((s,e) => s+e.amount, 0);
+    const daysInMonth = new Date(Number(year), Number(month), 0).getDate();
+    // Any saved day entry counts as active, including 0 revenue/0 quantity.
+    const expenseDays = dailyData.length;
+
+    // Entry-based expense logic (same as sheet): only count expenses for entered days
+    let totalStaffCost = (fullStaffCost / daysInMonth) * expenseDays;
+    let totalOtherExpenses = (fullOtherExpenses / daysInMonth) * expenseDays;
+    let totalExpenses = totalStaffCost + totalOtherExpenses;
+
+    // Profit formula from sheet:
+    // per day = revenue - (revenue * 0.8) - dayTotal
+    // monthly = sum(per-day) = 20% revenue - prorated expenses
+    let profit = (totalRevenue * 0.2) - totalExpenses;
+
+    // If month totals were imported from Google Sheet, use them as source of truth.
+    const sheetOverride = getSheetMonthTotal(year, month);
+    if (sheetOverride) {
+      totalRevenue = sheetOverride.revenue;
+      totalQuantity = sheetOverride.quantity;
+      totalStaffCost = sheetOverride.staffCost;
+      totalOtherExpenses = sheetOverride.otherExpenses;
+      totalExpenses = totalStaffCost + totalOtherExpenses;
+      profit = sheetOverride.profit;
+    }
+
     const activeDays = dailyData.filter(d => d.revenue > 0).length;
     const avgDailyRevenue = activeDays > 0 ? totalRevenue / activeDays : 0;
-    res.json({ totalRevenue, totalQuantity, totalStaffCost, totalOtherExpenses,
-      totalExpenses, profit, avgDailyRevenue, dailyData, staff, expenses });
+    res.json({
+      totalRevenue, totalQuantity, totalStaffCost, totalOtherExpenses,
+      totalExpenses, profit, avgDailyRevenue, dailyData, staff, expenses,
+      fullStaffCost, fullOtherExpenses, enteredDays: expenseDays, daysInMonth
+    });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -269,7 +320,20 @@ app.get('/api/yearly/:year', async (req, res) => {
     }
     const totalStaffCost = staff.reduce((s,st) => s+st.monthly_salary, 0);
     const months = [];
+    const dim = (y, m) => new Date(Number(y), Number(m), 0).getDate();
     for (let m = 1; m <= 12; m++) {
+      const sheetOverride = getSheetMonthTotal(year, m);
+      if (sheetOverride) {
+        months.push({
+          month: m,
+          revenue: sheetOverride.revenue,
+          staffCost: sheetOverride.staffCost,
+          otherExpenses: sheetOverride.otherExpenses,
+          profit: sheetOverride.profit
+        });
+        continue;
+      }
+
       let dailyData, expenses;
       if (USE_PG) {
         const mStr = String(m).padStart(2,'0');
@@ -280,9 +344,22 @@ app.get('/api/yearly/:year', async (req, res) => {
         expenses = Object.values(getExpenses(year, m));
       }
       const revenue = dailyData.reduce((s,d) => s+(d.revenue||0), 0);
-      const otherExpenses = expenses.reduce((s,e) => s+e.amount, 0);
-      months.push({ month: m, revenue, staffCost: totalStaffCost,
-        otherExpenses, profit: revenue - totalStaffCost - otherExpenses });
+      const fullOtherExpenses = expenses.reduce((s,e) => s+e.amount, 0);
+      // Any saved day entry counts as active, including 0 revenue/0 quantity.
+      const enteredDays = dailyData.length;
+      const daysInMonth = dim(year, m);
+
+      // Match sheet behavior: monthly expenses only count for days that have entries.
+      const staffCost = (totalStaffCost / daysInMonth) * enteredDays;
+      const otherExpenses = (fullOtherExpenses / daysInMonth) * enteredDays;
+      const totalExpenses = staffCost + otherExpenses;
+
+      // Profit formula used in sheet:
+      // per day = revenue - (revenue * 0.8) - dayTotal
+      // monthly = 20% of total revenue - prorated total expenses
+      const profit = (revenue * 0.2) - totalExpenses;
+
+      months.push({ month: m, revenue, staffCost, otherExpenses, profit });
     }
     res.json(months);
   } catch(e) { res.status(500).json({ error: e.message }); }

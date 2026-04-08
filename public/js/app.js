@@ -78,7 +78,7 @@ function navigateTo(page) {
   document.getElementById('pageTitle').textContent =
     { dashboard:'Dashboard', entry:'Data Entry', staff:'Staff',
       expenses:'Expenses', analysis:'Analysis', yearly:'Yearly View',
-      shipments:'Shipments', balance:'Balance' }[page];
+      shipments:'Shipments' }[page];
   loadPage(page);
 }
 
@@ -91,7 +91,6 @@ function loadPage(page) {
     case 'analysis':  loadAnalysis(); break;
     case 'yearly':    loadYearly(); break;
     case 'shipments': loadShipments(); break;
-    case 'balance':   loadBalance(); break;
   }
 }
 
@@ -319,28 +318,15 @@ function dashRangeLabel(months) {
 
 async function fetchAggData(months) {
   const results = await Promise.all(months.map(({year,month}) => api(`/api/analysis/${year}/${month}`)));
-  const totalRevenue      = results.reduce((s,r) => s+(r.totalRevenue||0), 0);
-  const totalQuantity     = results.reduce((s,r) => s+(r.totalQuantity||0), 0);
-  const totalStaffCost    = results.reduce((s,r) => s+(r.totalStaffCost||0), 0);
-  const totalOtherExpenses= results.reduce((s,r) => s+(r.totalOtherExpenses||0), 0);
+  const totalRevenue      = results.reduce((s,r) => s + Number(r.totalRevenue || 0), 0);
+  const totalQuantity     = results.reduce((s,r) => s + Number(r.totalQuantity || 0), 0);
+  const totalStaffCost    = results.reduce((s,r) => s + Number(r.totalStaffCost || 0), 0);
+  const totalOtherExpenses= results.reduce((s,r) => s + Number(r.totalOtherExpenses || 0), 0);
   const totalExpenses     = totalStaffCost + totalOtherExpenses;
-  const allDaily          = results.flatMap(r => r.dailyData||[]);
+  const allDaily          = results.flatMap(r => r.dailyData || []);
   const activeDays        = allDaily.filter(d => d.revenue > 0).length;
-  const avgDailyRevenue   = activeDays > 0 ? totalRevenue/activeDays : 0;
-
-  // Profit formula aligned with Data Entry row:
-  // per day: revenue - (revenue * 0.8) - dailyTotal
-  // where dailyTotal = (monthStaff + monthOtherExpenses) / daysInMonth
-  const profit = results.reduce((sum, r, idx) => {
-    const ym = months[idx] || {};
-    const dim = daysInMonth(ym.month || 1, ym.year || new Date().getFullYear());
-    const monthDailyTotal = ((r.totalStaffCost || 0) + (r.totalOtherExpenses || 0)) / dim;
-    const monthProfit = (r.dailyData || []).reduce((acc, day) => {
-      const rev = Number(day?.revenue || 0);
-      return acc + (rev - (rev * 0.8) - monthDailyTotal);
-    }, 0);
-    return sum + monthProfit;
-  }, 0);
+  const avgDailyRevenue   = activeDays > 0 ? totalRevenue / activeDays : 0;
+  const profit            = results.reduce((s,r) => s + Number(r.profit || 0), 0);
 
   return { totalRevenue, totalQuantity, totalStaffCost, totalOtherExpenses, totalExpenses, profit, avgDailyRevenue, dailyData: allDaily, results };
 }
@@ -1611,7 +1597,43 @@ async function loadAnalysis() {
 }
 
 // ── YEARLY VIEW ────────────────────────────────────────────────
+function initYearlyControls() {
+  const yrInp = document.getElementById('yearlyYearInput');
+  const prev = document.getElementById('yearlyPrevBtn');
+  const next = document.getElementById('yearlyNextBtn');
+  if (!yrInp || yrInp._init) return;
+  yrInp._init = true;
+
+  yrInp.addEventListener('change', () => {
+    const y = parseInt(yrInp.value, 10);
+    if (!Number.isFinite(y)) return;
+    state.year = y;
+    document.getElementById('yearInput').value = state.year;
+    updateLabels();
+    loadYearly();
+  });
+
+  prev?.addEventListener('click', () => {
+    state.year--;
+    document.getElementById('yearInput').value = state.year;
+    yrInp.value = String(state.year);
+    updateLabels();
+    loadYearly();
+  });
+
+  next?.addEventListener('click', () => {
+    state.year++;
+    document.getElementById('yearInput').value = state.year;
+    yrInp.value = String(state.year);
+    updateLabels();
+    loadYearly();
+  });
+}
+
 async function loadYearly() {
+  initYearlyControls();
+  const yrInp = document.getElementById('yearlyYearInput');
+  if (yrInp) yrInp.value = String(state.year);
   document.getElementById('yearly-year-label').textContent = state.year;
   const months = await api(`/api/yearly/${state.year}`);
 
