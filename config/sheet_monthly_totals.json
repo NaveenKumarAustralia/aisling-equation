@@ -1,0 +1,222 @@
+{
+  "generatedAt": "2026-04-05T14:25:40.168Z",
+  "source": "Google Sheet export",
+  "totals": [
+    {
+      "year": 2025,
+      "month": 1,
+      "revenue": 6501372.283,
+      "quantity": 10262,
+      "staffCost": 638000,
+      "otherExpenses": 0,
+      "profit": 556374.4566
+    },
+    {
+      "year": 2025,
+      "month": 2,
+      "revenue": 4565388.995,
+      "quantity": 10159,
+      "staffCost": 638000,
+      "otherExpenses": 105900,
+      "profit": 169177.7989
+    },
+    {
+      "year": 2025,
+      "month": 3,
+      "revenue": 7074310.019,
+      "quantity": 10220,
+      "staffCost": 638000,
+      "otherExpenses": 105900,
+      "profit": 670962.0037
+    },
+    {
+      "year": 2025,
+      "month": 4,
+      "revenue": 5611462.423,
+      "quantity": 9692,
+      "staffCost": 638000,
+      "otherExpenses": 105900,
+      "profit": 378392.4846
+    },
+    {
+      "year": 2025,
+      "month": 5,
+      "revenue": 7618445.324,
+      "quantity": 10892,
+      "staffCost": 638000,
+      "otherExpenses": 105900,
+      "profit": 779789.0647
+    },
+    {
+      "year": 2025,
+      "month": 6,
+      "revenue": 3781844.448,
+      "quantity": 5029,
+      "staffCost": 638000,
+      "otherExpenses": 105900,
+      "profit": 12468.8896
+    },
+    {
+      "year": 2025,
+      "month": 7,
+      "revenue": 8449271.098,
+      "quantity": 9591,
+      "staffCost": 1276000,
+      "otherExpenses": 211800,
+      "profit": 945954.2196
+    },
+    {
+      "year": 2025,
+      "month": 8,
+      "revenue": 7311690,
+      "quantity": 10427,
+      "staffCost": 639875,
+      "otherExpenses": 105900,
+      "profit": 716563
+    },
+    {
+      "year": 2025,
+      "month": 9,
+      "revenue": 5897905,
+      "quantity": 10387,
+      "staffCost": 678500,
+      "otherExpenses": 105900,
+      "profit": 395181
+    },
+    {
+      "year": 2025,
+      "month": 10,
+      "revenue": 8202296,
+      "quantity": 14930,
+      "staffCost": 668300,
+      "otherExpenses": 105900,
+      "profit": 866259.2
+    },
+    {
+      "year": 2025,
+      "month": 11,
+      "revenue": 5898387,
+      "quantity": 10117,
+      "staffCost": 699640,
+      "otherExpenses": 105900,
+      "profit": 374137.4
+    },
+    {
+      "year": 2025,
+      "month": 12,
+      "revenue": 1826834,
+      "quantity": 4294,
+      "staffCost": 715600,
+      "otherExpenses": 105900,
+      "profit": -456133.2
+    },
+    {
+      "year": 2026,
+      "month": 1,
+      "revenue": 10497085,
+      "quantity": 16483,
+      "staffCost": 15000,
+      "otherExpenses": 4000,
+      "profit": 3000
+    },
+    {
+      "year": 2026,
+      "month": 2,
+      "revenue": 9561649,
+      "quantity": 18913,
+      "staffCost": 0,
+      "otherExpenses": 0,
+      "profit": 1912329.8
+    },
+    {
+      "year": 2026,
+      "month": 3,
+      "revenue": 0,
+      "quantity": 10220,
+      "staffCost": 0,
+      "otherExpenses": 0,
+      "profit": 0
+    },
+    {
+      "year": 2026,
+      "month": 4,
+      "revenue": 0,
+      "quantity": 9692,
+      "staffCost": 0,
+      "otherExpenses": 0,
+      "profit": 0
+    },
+    {
+      "year": 2026,
+      "month": 5,
+      "revenue": 0,
+      "quantity": 10892,
+      "staffCost": 0,
+      "otherExpenses": 0,
+      "profit": 0
+    },
+    {
+      "year": 2026,
+      "month": 6,
+      "revenue": 0,
+      "quantity": 5029,
+      "staffCost": 0,
+      "otherExpenses": 0,
+      "profit": 0
+    },
+    {
+      "year": 2026,
+      "month": 7,
+      "revenue": 0,
+      "quantity": 9591,
+      "staffCost": 0,
+      "otherExpenses": 0,
+      "profit": 0
+    },
+    {
+      "year": 2026,
+      "month": 8,
+      "revenue": 0,
+      "quantity": 10427,
+      "staffCost": 0,
+      "otherExpenses": 0,
+      "profit": 0
+    },
+    {
+      "year": 2026,
+      "month": 9,
+      "revenue": 0,
+      "quantity": 10387,
+      "staffCost": 0,
+      "otherExpenses": 0,
+      "profit": 0
+    },
+    {
+      "year": 2026,
+      "month": 10,
+      "revenue": 0,
+      "quantity": 14930,
+      "staffCost": 0,
+      "otherExpenses": 0,
+      "profit": 0
+    },
+    {
+      "year": 2026,
+      "month": 11,
+      "revenue": 0,
+      "quantity": 10117,
+      "staffCost": 0,
+      "otherExpenses": 0,
+      "profit": 0
+    },
+    {
+      "year": 2026,
+      "month": 12,
+      "revenue": 0,
+      "quantity": 4294,
+      "staffCost": 0,
+      "otherExpenses": 0,
+      "profit": 0
+    }
+  ]
+}

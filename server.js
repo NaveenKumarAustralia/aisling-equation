@@ -83,7 +83,14 @@ function nextId(arr) {
 let _sheetTotalsCache = null;
 function loadSheetTotalsIndex() {
   if (_sheetTotalsCache) return _sheetTotalsCache;
-  const raw = readFile('sheet_monthly_totals.json');
+  // Keep sheet monthly totals in tracked repo path (config/) so Railway gets it.
+  let raw = null;
+  try {
+    const p = path.join(__dirname, 'config', 'sheet_monthly_totals.json');
+    if (fs.existsSync(p)) raw = JSON.parse(fs.readFileSync(p, 'utf8'));
+  } catch (_) {}
+  // Backward-compatible fallback for local older setups
+  if (!raw) raw = readFile('sheet_monthly_totals.json');
   const idx = new Map();
   const list = Array.isArray(raw?.totals) ? raw.totals : [];
   list.forEach(t => {
